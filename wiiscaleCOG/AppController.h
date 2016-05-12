@@ -28,6 +28,9 @@
 	WiiRemote* wii;
     //WiiScaleSocket* wiisocket;
     SocketIOClient* socket;
+    //時間割り込み的な
+    NSTimer *tm;
+    NSLock* _lock;   //割り込み禁止
 	
 	float tare;
 	float avgWeight;
@@ -35,7 +38,9 @@
 	float lastWeight;
 	float weightSamples[100];
 	int weightSampleIndex;
+    int count;
 	BOOL sent;
+    BOOL serverConnected;
 	float height_cm;
     float cogX;
     float cogY;
@@ -50,6 +55,7 @@
 - (IBAction)doDiscovery:(id)sender;
 - (IBAction)doTare:(id)sender;
 - (IBAction)send:(id)sender;
+- (void)hoge:(NSTimer*)timer;
 //- (void)registerAsObserver;
 
 @end

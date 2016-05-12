@@ -3,14 +3,11 @@
 @implementation AppController
 #pragma mark Window
 
-
-
-
 - (id)init
 {
     self = [super init];
     if (self) {
-		
+        serverConnected = NO;
 		weightSampleIndex = 0;
         
         // Load TextStrings.plist
@@ -24,28 +21,60 @@
         //[self registerAsObserver];
         //[self testSocket];
         //wiisocket = [[WiiScaleSocket alloc] init];
-        NSURL* url = [[NSURL alloc] initWithString:@"http://localhost:8000"];
+        //NSURL* url = [[NSURL alloc] initWithString:@"http://ailab-mayfestival2016-server.herokuapp.com"];
+        NSURL* url = [[NSURL alloc] initWithString:@"http://192.168.1.39:8000"];
         
-        socket = [[SocketIOClient alloc] initWithSocketURL:url options:@{@"log": @YES, @"forcePolling": @YES}];
+        socket = [[SocketIOClient alloc] initWithSocketURL:url options:@{@"log": @YES, @"forcePolling": @NO}];
         
         [socket on:@"connect" callback:^(NSArray* data, SocketAckEmitter* ack) {
             NSLog(@"socket connected");
+            serverConnected = YES;
+            [socket emit:@"enter_room" withItems:@[@{@"room": @"wiifit"}]];
+        }];
+        
+        [socket on:@"disconnect" callback:^(NSArray* data, SocketAckEmitter* ack) {
+            NSLog(@"socket disconnected");
+            serverConnected = NO;
+        }];
+        
+        [socket on:@"reconnect" callback:^(NSArray* data, SocketAckEmitter* ack) {
+            NSLog(@"socket reconnected");
+            serverConnected = YES;
+            [socket emit:@"enter_room" withItems:@[@{@"room": @"wiifit"}]];
         }];
         
         [socket on:@"currentAmount" callback:^(NSArray* data, SocketAckEmitter* ack) {
             double cur = [[data objectAtIndex:0] floatValue];
             
-            [socket emitWithAck:@"canUpdate" withItems:@[@(cur)]](0, ^(NSArray* data) {
-                [socket emit:@"update" withItems:@[@{@"amount": @(cur + 2.50)}]];
-            });
+            //[socket emitWithAck:@"canUpdate" withItems:@[@(cur)]](0, ^(NSArray* data) {
+            [socket emit:@"update" withItems:@[@{@"amount": @(cur + 2.50)}]];
+            //});
             
-            [ack with:@[@"Got your currentAmount, ", @"dude"]];
+            //[ack with:@[@"Got your currentAmount, ", @"dude"]];
+            
+
         }];
         
+        _lock = [[NSLock alloc] init];
+        tm = [NSTimer scheduledTimerWithTimeInterval:1.0f/6.0f target:self selector:@selector(hoge:) userInfo:nil repeats:YES];
         [socket connect];
+        count = 0;
 
     }
     return self;
+}
+
+-(void)hoge:(NSTimer*)timer{
+    if (serverConnected){
+        //割り込み禁止
+        [_lock lock];
+        float cogX_ = cogX;
+        
+        [_lock unlock];
+        [socket emit:@"transfer" withItems:@[@{@"event": @"SendCOG",
+                                               @"room" : @"Game",
+                                               @"data" : @(cogX_)}]];
+    }
 }
 
 -(IBAction)send:(id)sender{
@@ -165,6 +194,8 @@
 	float trueWeight = lastWeight + tare;
 	[weightIndicator setDoubleValue:trueWeight];
 	
+    //割り込み禁止
+    [_lock lock];
 	if(trueWeight > 5.0f) {
         
         cogX = ((topRight + bottomRight) - (topLeft + bottomLeft))/(lastWeight);
@@ -175,11 +206,27 @@
         cogX = 0.0f;
         cogY = 0.0f;
     }
+    [_lock unlock];
     [openglWin reWriteX:cogX Y:cogY];
     
     [weight setStringValue:[NSString stringWithFormat:@"%4.1fkg  %4.1flbs", MAX(0.0, trueWeight), MAX(0.0, (trueWeight) * 2.20462262)]];
     
-    [socket emit:@"from_client" withItems:[NSArray arrayWithObjects:[NSString stringWithFormat:@"%.4f", cogX], nil]];
+    //[NSThread sleepForTimeInterval:0.5];
+    /*
+    if (count > 30){
+        
+        [socket emit:@"transfer" withItems:@[@{@"event": @"SendCOG",
+                                               @"room" : @"Game",
+                                               @"data" : @(cogX)}]];
+        count = 0;
+    }
+    else{
+        count++;
+    }
+     */
+        //[NSArray arrayWithObjects:[NSString stringWithFormat:@"%.4f", cogX], nil]];
+    
+    //room : Game
     
     //[mine observeValueForKeyPath:@"weightBL" ofObject:self change:NSKeyValueChangeNewKey context:nil];
     
